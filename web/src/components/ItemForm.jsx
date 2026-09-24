@@ -6,6 +6,11 @@ export default function ItemForm({ value, onChange, showSale = false }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
   const setId = (k, v) => onChange({ ...value, identifiers: { ...(value.identifiers || {}), [k]: v } });
   const ids = value.identifiers || {};
+  const attrs = value.attributes || {};
+  const setSub = (group, k, v) =>
+    onChange({ ...value, attributes: { ...attrs, [group]: { ...(attrs[group] || {}), [k]: v } } });
+  const coin = attrs.coin || {};
+  const inst = attrs.instrument || {};
 
   return (
     <div>
@@ -46,6 +51,90 @@ export default function ItemForm({ value, onChange, showSale = false }) {
           <input value={value.location || ''} placeholder="Basement, shelf 3" onChange={e => set('location', e.target.value)} />
         </label>
       </div>
+
+      {value.category === 'coin' && (
+        <details open>
+          <summary className="muted">Coin details (used for the melt floor and Mint product search)</summary>
+          <div className="grid2">
+            <label className="field"><span>Product type</span>
+              <select value={coin.product_type || 'other'} onChange={e => setSub('coin', 'product_type', e.target.value)}>
+                {['circulated_coin', 'uncirculated_coin', 'proof_coin', 'proof_set', 'mint_set', 'commemorative', 'bullion', 'roll', 'bag', 'currency_note', 'other']
+                  .map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Mint product name (exact)</span>
+              <input value={coin.mint_product_name || ''} onChange={e => setSub('coin', 'mint_product_name', e.target.value)} />
+            </label>
+            <label className="field"><span>Series</span>
+              <input value={coin.series || ''} onChange={e => setSub('coin', 'series', e.target.value)} />
+            </label>
+            <label className="field"><span>Year / mint mark</span>
+              <input value={[coin.year, coin.mint_mark].filter(Boolean).join('-')} placeholder="1986-S"
+                onChange={e => { const [y, m] = e.target.value.split('-'); onChange({ ...value, attributes: { ...attrs, coin: { ...coin, year: y || '', mint_mark: m || '' } } }); }} />
+            </label>
+            <label className="field"><span>Metal</span>
+              <select value={coin.metal || 'unknown'} onChange={e => setSub('coin', 'metal', e.target.value)}>
+                {['silver', 'gold', 'platinum', 'palladium', 'copper', 'clad', 'nickel', 'unknown'].map(m => <option key={m}>{m}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Pure metal, troy oz each</span>
+              <input type="number" step="0.0001" value={coin.troy_oz_each ?? ''} onChange={e => setSub('coin', 'troy_oz_each', e.target.value === '' ? '' : Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Count in lot</span>
+              <input type="number" min="1" value={coin.count ?? 1} onChange={e => setSub('coin', 'count', Number(e.target.value) || 1)} />
+            </label>
+            <label className="field"><span>Grading service (slabbed only)</span>
+              <select value={coin.grading_service || 'none'} onChange={e => setSub('coin', 'grading_service', e.target.value)}>
+                {['none', 'PCGS', 'NGC', 'ANACS', 'other'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Cert number (from slab label)</span>
+              <input inputMode="numeric" value={coin.cert_number || ''} onChange={e => setSub('coin', 'cert_number', e.target.value)} />
+            </label>
+            <label className="field"><span>PCGS coin # (raw coins)</span>
+              <input inputMode="numeric" value={coin.pcgs_number || ''} placeholder="e.g. 7296" onChange={e => setSub('coin', 'pcgs_number', e.target.value)} />
+            </label>
+            <label className="field"><span>Grade estimate (Sheldon 1–70)</span>
+              <div className="row" style={{ gap: 6 }}>
+                <input type="number" min="1" max="70" style={{ width: 90 }} value={coin.grade_estimate_low ?? ''} placeholder="low"
+                  onChange={e => setSub('coin', 'grade_estimate_low', Number(e.target.value) || 0)} />
+                <span>to</span>
+                <input type="number" min="1" max="70" style={{ width: 90 }} value={coin.grade_estimate_high ?? ''} placeholder="high"
+                  onChange={e => setSub('coin', 'grade_estimate_high', Number(e.target.value) || 0)} />
+              </div>
+            </label>
+            <label className="field"><span>Packaging</span>
+              <input value={coin.packaging || ''} onChange={e => setSub('coin', 'packaging', e.target.value)} />
+            </label>
+          </div>
+        </details>
+      )}
+
+      {value.category === 'musical_instrument' && (
+        <details open>
+          <summary className="muted">Instrument details (used for the Reverb search)</summary>
+          <div className="grid2">
+            <label className="field"><span>Reverb search</span>
+              <input value={inst.reverb_query || ''} onChange={e => setSub('instrument', 'reverb_query', e.target.value)} />
+            </label>
+            <label className="field"><span>Type</span>
+              <input value={inst.type || ''} onChange={e => setSub('instrument', 'type', e.target.value)} />
+            </label>
+            <label className="field"><span>Country of manufacture</span>
+              <input value={inst.country_of_manufacture || ''} onChange={e => setSub('instrument', 'country_of_manufacture', e.target.value)} />
+            </label>
+            <label className="field"><span>Finish / color</span>
+              <input value={inst.finish_color || ''} onChange={e => setSub('instrument', 'finish_color', e.target.value)} />
+            </label>
+            <label className="field"><span>Case included</span>
+              <input value={inst.case_included || ''} onChange={e => setSub('instrument', 'case_included', e.target.value)} />
+            </label>
+            <label className="field"><span>Modifications / repairs</span>
+              <input value={inst.modifications || ''} onChange={e => setSub('instrument', 'modifications', e.target.value)} />
+            </label>
+          </div>
+        </details>
+      )}
 
       <details>
         <summary className="muted">Identifiers (serial, catalog #, issue #, mint mark…)</summary>

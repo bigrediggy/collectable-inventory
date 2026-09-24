@@ -5,6 +5,10 @@ import { analyzeItem } from './analyze.js';
 import { valueItem } from './valuation.js';
 import { ebayConfigured } from './ebay.js';
 import { discogsConfigured } from './discogs.js';
+import { reverbConfigured } from './reverb.js';
+import { getSpotPrices } from './spot.js';
+import { pcgsConfigured } from './pcgs.js';
+import { cachePersistent } from './cache.js';
 import { CATEGORIES } from './categories.js';
 
 const app = express();
@@ -25,12 +29,20 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  // Health never spends an API call: it only reports what's cached.
+  const spot = await getSpotPrices({ fetchIfMissing: false });
   res.json({
     ok: true,
     anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
     ebay: ebayConfigured(),
     discogs: discogsConfigured(),
+    reverb: reverbConfigured(),
+    pcgs: pcgsConfigured(),
+    cache: cachePersistent ? 'supabase' : 'memory only (set SUPABASE_URL + SUPABASE_ANON_KEY)',
+    spot: spot.prices
+      ? { ...spot.prices, source: spot.source, asOf: spot.asOf, expiresAt: spot.expiresAt || null }
+      : (process.env.METALS_DEV_API_KEY ? 'not fetched yet — first coin valuation will fetch and cache for 24h' : null),
     categories: CATEGORIES,
   });
 });

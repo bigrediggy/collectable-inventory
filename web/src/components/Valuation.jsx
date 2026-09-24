@@ -6,7 +6,11 @@ export default function Valuation({ item, onAccept }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [err, setErr] = useState(null);
-  const [query, setQuery] = useState((item.ai_raw?.search_queries || [])[0] || item.title || '');
+  const coin = item.attributes?.coin || item.ai_raw?.coin || null;
+  const inst = item.attributes?.instrument || item.ai_raw?.instrument || null;
+  const [query, setQuery] = useState(
+    coin?.mint_product_name || inst?.reverb_query || (item.ai_raw?.search_queries || [])[0] || item.title || '',
+  );
 
   async function run() {
     setBusy(true); setErr(null);
@@ -19,6 +23,8 @@ export default function Valuation({ item, onAccept }) {
         condition: item.condition,
         identifiers: item.identifiers,
         search_queries: [query],
+        coin: coin ? { ...coin, count: coin.count || item.quantity || 1 } : null,
+        instrument: inst ? { ...inst, reverb_query: query } : null,
       });
       setResult(r);
     } catch (e) { setErr(e.message); }
@@ -64,6 +70,28 @@ export default function Valuation({ item, onAccept }) {
             </div>
           ) : <div className="muted">No suggestion.</div>}
 
+          {result.pcgs?.guide_low != null && (
+            <div className="small" style={{ marginTop: 6 }}>
+              PCGS price guide <span className="price">${fmt(result.pcgs.guide_low)}{result.pcgs.guide_high !== result.pcgs.guide_low ? `–$${fmt(result.pcgs.guide_high)}` : ''}</span>
+              <span className="muted"> — {result.pcgs.name}, {result.pcgs.grade_label} (matched by {result.pcgs.matched_by})</span>
+              {result.pcgs.url && <> · <a href={result.pcgs.url} target="_blank" rel="noreferrer">CoinFacts</a></>}
+              {result.pcgs.facts?.population != null && <span className="muted"> · pop {result.pcgs.facts.population}{result.pcgs.facts.pop_higher != null ? ` / ${result.pcgs.facts.pop_higher} higher` : ''}</span>}
+            </div>
+          )}
+          {result.melt && (
+            <div className="small" style={{ marginTop: 6 }}>
+              Melt value <span className="price">${fmt(result.melt.melt)}</span>
+              <span className="muted"> — {result.melt.oz} oz {result.melt.metal} × ${fmt(result.melt.spot)}/oz
+                ({result.melt.count > 1 ? `${result.melt.count} × $${fmt(result.melt.perCoin)}, ` : ''}{result.melt.source})</span>
+            </div>
+          )}
+          {result.priceGuide && (
+            <div className="small" style={{ marginTop: 4 }}>
+              Reverb price guide: <span className="price">${fmt(result.priceGuide.low)}–${fmt(result.priceGuide.high)}</span>
+              {result.priceGuide.url && <> · <a href={result.priceGuide.url} target="_blank" rel="noreferrer">{result.priceGuide.title}</a></>}
+            </div>
+          )}
+
           {result.warnings?.map((w, i) => <div key={i} className="small" style={{ color: 'var(--warn)' }}>{w}</div>)}
 
           {result.comps?.length > 0 && (
@@ -76,7 +104,11 @@ export default function Valuation({ item, onAccept }) {
                     <div className="muted small">
                       {c.source === 'discogs'
                         ? `${c.year || ''} ${c.label || ''} ${c.catno || ''} · ${c.num_for_sale ?? '?'} for sale · want ${c.want ?? '?'}`
-                        : `${c.condition || ''} ${c.buying || ''}`}
+                        : c.source === 'reverb'
+                          ? `Reverb · ${c.year || ''} ${c.condition || ''}`
+                          : c.source === 'pcgs_apr'
+                            ? `Sold · ${c.house || 'auction'} ${c.date ? String(c.date).slice(0, 10) : ''}`
+                            : `eBay · ${c.condition || ''} ${c.buying || ''}`}
                     </div>
                   </div>
                   <div className="price">{c.price != null ? `$${fmt(c.price)}` : '—'}</div>

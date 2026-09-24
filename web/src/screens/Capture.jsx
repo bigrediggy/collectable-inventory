@@ -9,6 +9,7 @@ const EMPTY = { title: '', category: 'other', condition: 'Unknown', quantity: 1,
 export default function Capture({ onSaved }) {
   const [photos, setPhotos] = useState([]);       // [{blob, url}]
   const [hint, setHint] = useState('');
+  const [lot, setLot] = useState(false);       // set / roll / lot of several pieces
   const [item, setItem] = useState(EMPTY);
   const [phase, setPhase] = useState('shoot');    // shoot | analyzing | review | saving
   const [err, setErr] = useState(null);
@@ -30,7 +31,11 @@ export default function Capture({ onSaved }) {
       const images = await Promise.all(photos.slice(0, 4).map(async p => ({
         data: await blobToBase64(p.blob), media_type: 'image/jpeg',
       })));
-      const ai = await analyze(images, hint);
+      const fullHint = [
+        lot ? 'This is ONE lot: a set, roll, bag, or group of several pieces sold together. Count them, describe the lot as a whole, and put the count in coin.count / attributes.quantity_in_photo.' : '',
+        hint,
+      ].filter(Boolean).join(' ');
+      const ai = await analyze(images, fullHint);
       setItem({
         title: ai.title || '',
         category: ai.category || 'other',
@@ -40,10 +45,14 @@ export default function Capture({ onSaved }) {
         year_made: ai.year_made || '',
         condition: ai.condition || 'Unknown',
         identifiers: ai.identifiers || {},
-        attributes: ai.attributes || {},
+        attributes: {
+          ...(ai.attributes || {}),
+          ...(ai.coin ? { coin: ai.coin } : {}),
+          ...(ai.instrument ? { instrument: ai.instrument } : {}),
+        },
         description: [ai.description, ai.condition_notes ? `Condition: ${ai.condition_notes}` : '']
           .filter(Boolean).join('\n\n'),
-        quantity: Number(ai.attributes?.quantity_in_photo) || 1,
+        quantity: Number(ai.coin?.count) || Number(ai.attributes?.quantity_in_photo) || 1,
         ai_raw: ai,
         ai_confidence: ai.confidence,
       });
@@ -75,7 +84,7 @@ export default function Capture({ onSaved }) {
 
   function reset() {
     photos.forEach(p => URL.revokeObjectURL(p.url));
-    setPhotos([]); setHint(''); setItem(EMPTY); setPhase('shoot'); setErr(null);
+    setPhotos([]); setHint(''); setLot(false); setItem(EMPTY); setPhase('shoot'); setErr(null);
   }
 
   return (
@@ -100,6 +109,10 @@ export default function Capture({ onSaved }) {
 
       {phase === 'shoot' && (
         <div className="card">
+          <div className="chips" style={{ marginBottom: 6 }}>
+            <button type="button" className={'chip' + (!lot ? ' active' : '')} onClick={() => setLot(false)}>Single item</button>
+            <button type="button" className={'chip' + (lot ? ' active' : '')} onClick={() => setLot(true)}>Set / roll / lot</button>
+          </div>
           <label className="field"><span>Optional hint for the AI</span>
             <input value={hint} placeholder='e.g. "Gibson, bought new in 1972" or "found in attic"'
               onChange={e => setHint(e.target.value)} />
