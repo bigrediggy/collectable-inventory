@@ -83,6 +83,10 @@ export default function ItemForm({ value, onChange, showSale = false }) {
             <label className="field"><span>Count in lot</span>
               <input type="number" min="1" value={coin.count ?? 1} onChange={e => setSub('coin', 'count', Number(e.target.value) || 1)} />
             </label>
+            <label className="field"><span>Pure metal, troy oz TOTAL (mixed lots — overrides each × count)</span>
+              <input type="number" step="0.0001" value={coin.troy_oz_total ?? ''} placeholder="e.g. 0.7734 for a set with one silver dollar"
+                onChange={e => setSub('coin', 'troy_oz_total', e.target.value === '' ? '' : Number(e.target.value))} />
+            </label>
             <label className="field"><span>Grading service (slabbed only)</span>
               <select value={coin.grading_service || 'none'} onChange={e => setSub('coin', 'grading_service', e.target.value)}>
                 {['none', 'PCGS', 'NGC', 'ANACS', 'other'].map(s => <option key={s}>{s}</option>)}

@@ -82,7 +82,7 @@ export default function Valuation({ item, onAccept }) {
             <div className="small" style={{ marginTop: 6 }}>
               Melt value <span className="price">${fmt(result.melt.melt)}</span>
               <span className="muted"> — {result.melt.oz} oz {result.melt.metal} × ${fmt(result.melt.spot)}/oz
-                ({result.melt.count > 1 ? `${result.melt.count} × $${fmt(result.melt.perCoin)}, ` : ''}{result.melt.source})</span>
+                ({result.melt.mixed ? 'lot total, ' : result.melt.count > 1 ? `${result.melt.count} × $${fmt(result.melt.perCoin)}, ` : ''}{result.melt.source})</span>
             </div>
           )}
           {result.priceGuide && (

@@ -65,18 +65,24 @@ export async function meltValue(coin) {
   const metal = String(coin.metal || '').toLowerCase();
   if (!METALS.includes(metal)) return null;
 
-  const ozEach = Number(coin.troy_oz_each);
+  const ozEach = Number(coin.troy_oz_each) || 0;
+  const ozTotal = Number(coin.troy_oz_total) || 0;
   const count = Math.max(1, Number(coin.count) || 1);
-  if (!Number.isFinite(ozEach) || ozEach <= 0) return null;
+
+  // Mixed lots (some silver, some clad) carry the lot's total pure ounces in
+  // troy_oz_total; uniform lots use per-coin × count. Total wins when set.
+  const oz = ozTotal > 0 ? ozTotal : ozEach * count;
+  if (!(oz > 0)) return null;
 
   const { prices, source, asOf } = await getSpotPrices();
   const spot = prices?.[metal];
   if (!spot) return null;
 
-  // troy_oz_each is expected to already be the *pure metal* content
-  // (e.g. 0.7734 for a 90% silver dollar). Fineness is informational.
-  const perCoin = round(ozEach * spot);
-  return { melt: round(perCoin * count), perCoin, spot, metal, oz: round(ozEach * count, 4), count, source, asOf };
+  return {
+    melt: round(oz * spot),
+    perCoin: ozTotal > 0 ? null : round(ozEach * spot),
+    spot, metal, oz: round(oz, 4), count, mixed: ozTotal > 0, source, asOf,
+  };
 }
 
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;

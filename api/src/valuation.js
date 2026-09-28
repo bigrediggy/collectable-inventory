@@ -10,13 +10,16 @@ import { ebayCategoryFor } from './categories.js';
  * @param {object} item  { category, title, brand, model, identifiers, search_queries, condition, coin?, instrument? }
  */
 export async function valueItem(item) {
-  const queries = uniq([
+  const raw = uniq([
     ...(item.search_queries || []),
     item.coin?.mint_product_name,
     item.instrument?.reverb_query,
-    [item.brand, item.model, item.title].filter(Boolean).join(' '),
+    [item.brand, item.model].filter(Boolean).join(' '),
     item.title,
   ]).filter(q => q && q.trim().length > 2);
+  // Long, exact titles often return zero on eBay. Add progressively shorter
+  // variants so the search degrades gracefully instead of falling to melt-only.
+  const queries = uniq(raw.flatMap(q => [q, ...simplify(q)])).filter(q => q.split(' ').length >= 2);
 
   const out = { sources: [], comps: [], warnings: [], melt: null, priceGuide: null, pcgs: null };
 
@@ -93,18 +96,28 @@ export async function valueItem(item) {
   // --- eBay active listings (all categories) ---
   if (ebayConfigured()) {
     const categoryId = ebayCategoryFor(item.category);
-    for (const q of queries.slice(0, 2)) {
-      try {
-        const { comps, stats } = await ebayComps(q, { categoryId });
-        if (comps.length) {
-          out.comps.push(...comps);
-          out.sources.push({ source: 'ebay_active', query: q, stats });
-          break; // first query that returns something wins
+    let found = false, tried = [];
+    // Pass 1: within the eBay category. Pass 2: no category filter.
+    outer: for (const cat of [categoryId, null]) {
+      for (const q of queries.slice(0, 4)) {
+        tried.push(q);
+        try {
+          const { comps, stats } = await ebayComps(q, { categoryId: cat });
+          if (comps.length) {
+            out.comps.push(...comps);
+            out.sources.push({ source: 'ebay_active', query: q, stats, categoryFiltered: Boolean(cat) });
+            found = true;
+            break outer;
+          }
+        } catch (e) {
+          out.warnings.push(`eBay: ${e.message}`);
+          break outer;
         }
-      } catch (e) {
-        out.warnings.push(`eBay: ${e.message}`);
-        break;
       }
+      if (!categoryId) break;
+    }
+    if (!found && !out.warnings.some(w => w.startsWith('eBay:'))) {
+      out.warnings.push(`eBay: no active listings matched (tried: ${uniq(tried).slice(0, 3).map(q => `"${q}"`).join(', ')}). Edit the search query and try again.`);
     }
   } else {
     out.warnings.push('eBay not configured (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET)');
@@ -176,8 +189,9 @@ export async function valueItem(item) {
       out.suggestion = {
         low: floor, high: round2(floor * 1.25), suggested: round2(floor * 1.1),
         source: 'melt',
-        basis: `Melt value only: ${out.melt.oz} oz ${out.melt.metal} × $${out.melt.spot}/oz (${out.melt.source})`,
+        basis: `Melt value only — no comps found: ${out.melt.oz} oz ${out.melt.metal} × $${out.melt.spot}/oz (${out.melt.source})`,
       };
+      out.warnings.push('Suggestion is melt value only. Collector premium is not included — find comps before listing.');
     } else {
       if (out.suggestion.low < floor) out.suggestion.low = floor;
       if (out.suggestion.suggested < floor) out.suggestion.suggested = round2(floor * 1.05);
@@ -213,7 +227,16 @@ async function pcgsLookup(coin) {
   }
 
   const pcgsNo = String(coin.pcgs_number || '').replace(/\D/g, '');
-  if (!pcgsNo) return { note: svc === 'NGC' ? 'NGC slab — no PCGS# to look up; using eBay + melt' : 'no PCGS number identified; using eBay + melt' };
+  if (!pcgsNo) {
+    const isSet = ['proof_set', 'mint_set', 'roll', 'bag'].includes(coin.product_type) || (Number(coin.count) || 1) > 1;
+    return {
+      note: svc === 'NGC'
+        ? 'NGC slab — PCGS has no lookup for it; using eBay + melt'
+        : isSet
+          ? 'sets and lots have no single PCGS number — that\'s normal; using eBay + melt'
+          : 'no PCGS number identified for this coin — enter one in Coin details if you know it; using eBay + melt',
+    };
+  }
 
   let gLow = clampGrade(coin.grade_estimate_low), gHigh = clampGrade(coin.grade_estimate_high);
   if (!gLow && !gHigh) { gLow = 40; gHigh = 58; }
@@ -255,3 +278,17 @@ function conditionFactor(c) {
 }
 const round2 = n => Math.round(n * 100) / 100;
 const uniq = arr => [...new Set(arr)];
+
+/** Shorter variants of a search string, most specific first. */
+function simplify(q) {
+  const out = [];
+  let s = q.replace(/\([^)]*\)/g, ' ')                       // drop parentheticals
+           .replace(/\b(commemorative coin program|coin program|program|united states mint|us mint|u\.s\. mint)\b/gi, ' ')
+           .replace(/[-–—,:/]/g, ' ')
+           .replace(/\s+/g, ' ').trim();
+  if (s && s !== q) out.push(s);
+  const words = s.split(' ');
+  if (words.length > 6) out.push(words.slice(0, 6).join(' '));
+  if (words.length > 4) out.push(words.slice(0, 4).join(' '));
+  return out;
+}
