@@ -94,21 +94,30 @@ export default function Valuation({ item, onAccept }) {
 
           {result.warnings?.map((w, i) => <div key={i} className="small" style={{ color: 'var(--warn)' }}>{w}</div>)}
 
+          {result.relevance && (
+            <div className="muted small" style={{ marginTop: 8 }}>
+              {result.relevance.matches} same item · {result.relevance.partial} partial · {result.relevance.unrelated} unrelated
+              {' '}(only "same item" listings set the price)
+            </div>
+          )}
           {result.comps?.length > 0 && (
             <div className="comps" style={{ marginTop: 10 }}>
-              {result.comps.slice(0, 15).map((c, i) => (
-                <a className="comp" key={i} href={c.url} target="_blank" rel="noreferrer">
+              {result.comps.slice(0, 25).map((c, i) => (
+                <a className={'comp' + (c.relevance && c.relevance !== 'match' ? ' dim' : '')} key={i} href={c.url} target="_blank" rel="noreferrer">
                   {c.image ? <img src={c.image} alt="" /> : <div style={{ width: 48 }} />}
                   <div className="grow">
                     <div className="small" title={c.title}>{c.title}</div>
                     <div className="muted small">
+                      {c.relevance === 'partial' && <span className="badge listed">partial</span>}
+                      {c.relevance === 'unrelated' && <span className="badge">unrelated</span>}
+                      {c.relevance && c.relevance !== 'match' && ' '}
                       {c.source === 'discogs'
                         ? `${c.year || ''} ${c.label || ''} ${c.catno || ''} · ${c.num_for_sale ?? '?'} for sale · want ${c.want ?? '?'}`
                         : c.source === 'reverb'
                           ? `Reverb · ${c.year || ''} ${c.condition || ''}`
                           : c.source === 'pcgs_apr'
                             ? `Sold · ${c.house || 'auction'} ${c.date ? String(c.date).slice(0, 10) : ''}`
-                            : `eBay · ${c.condition || ''} ${c.buying || ''}`}
+                            : `eBay · ${c.condition || ''} · ${buyingLabel(c.buying)}`}
                     </div>
                   </div>
                   <div className="price">{c.price != null ? `$${fmt(c.price)}` : '—'}</div>
@@ -123,3 +132,8 @@ export default function Valuation({ item, onAccept }) {
 }
 
 const fmt = n => (n == null ? '—' : Number(n).toFixed(2));
+const buyingLabel = b => (b || '')
+  .split(',')
+  .map(x => ({ FIXED_PRICE: 'Buy It Now', AUCTION: 'Auction', BEST_OFFER: 'Best Offer', OFFERS: 'Offers' })[x.trim()] || x)
+  .filter(Boolean)
+  .join(' + ');

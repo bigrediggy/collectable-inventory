@@ -72,6 +72,8 @@ textarea { min-height: 90px; resize: vertical; }
   border: 1px solid var(--line); border-radius: 8px; }
 .comp img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
 .comp .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp.dim { opacity: 0.5; }
+.comp.dim .price { font-weight: 400; text-decoration: line-through; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }

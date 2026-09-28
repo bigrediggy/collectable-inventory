@@ -4,6 +4,7 @@ import { discogsComps, discogsConfigured } from './discogs.js';
 import { reverbComps, reverbPriceGuide, reverbConfigured } from './reverb.js';
 import { meltValue } from './spot.js';
 import { pcgsConfigured, pcgsByCert, pcgsByGrade, pcgsAprByCert, pcgsAprByGrade, factsMatchCoin } from './pcgs.js';
+import { classifyComps } from './relevance.js';
 import { ebayCategoryFor } from './categories.js';
 
 /**
@@ -123,6 +124,35 @@ export async function valueItem(item) {
     out.warnings.push('eBay not configured (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET)');
   }
 
+  // --- Relevance pass: only true matches drive the numbers ---
+  // Discogs and PCGS comps are keyed by release/cert so they're exact already;
+  // eBay and Reverb are free-text searches and need filtering.
+  const searchComps = out.comps.filter(c => c.source === 'ebay_active' || c.source === 'reverb');
+  if (searchComps.length) {
+    const { matches, partial, unrelated, method } = await classifyComps(item, searchComps);
+    out.relevance = { method, matches: matches.length, partial: partial.length, unrelated: unrelated.length };
+    for (const src of ['ebay_active', 'reverb']) {
+      const idx = out.sources.findIndex(s => s.source === src);
+      if (idx === -1) continue;
+      const prices = matches.filter(c => c.source === src).map(c => c.price);
+      if (prices.length >= 2) {
+        out.sources[idx].stats = priceStats(prices);
+        out.sources[idx].filtered = true;
+      } else {
+        out.sources.splice(idx, 1);
+        const label = src === 'reverb' ? 'Reverb' : 'eBay';
+        out.warnings.push(
+          prices.length === 1
+            ? `${label}: only 1 listing is the same item — not enough for a range. ${partial.length ? `${partial.length} listings are parts of it (e.g. single pieces of a set).` : ''} Try a different search or price it by hand.`
+            : `${label}: found ${searchComps.filter(c => c.source === src).length} listings but none are the same item${partial.length ? ` (${partial.length} are components, ${unrelated.length} unrelated)` : ''}. Try a different search.`,
+        );
+      }
+    }
+    // Show matches first, then partial, then unrelated.
+    const rank = { match: 0, partial: 1, unrelated: 2 };
+    out.comps.sort((a, b) => (rank[a.relevance] ?? 0) - (rank[b.relevance] ?? 0));
+  }
+
   // --- Suggested range ---
   // Prefer the specialist source; otherwise eBay. Active listings skew high
   // (unsold optimism), so suggest p25–median and call the median "suggested".
@@ -175,7 +205,7 @@ export async function valueItem(item) {
       out.suggestion = {
         low, high, suggested,
         source: primary.source,
-        basis: `${s.n} ${label} (median $${s.median})` + (out.priceGuide ? ` · Reverb price guide $${out.priceGuide.low}–$${out.priceGuide.high}` : ''),
+        basis: `${s.n} ${primary.filtered ? 'matching ' : ''}${label} (median $${s.median})` + (out.priceGuide ? ` · Reverb price guide $${out.priceGuide.low}–$${out.priceGuide.high}` : ''),
       };
     }
   } else {
