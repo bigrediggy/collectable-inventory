@@ -133,7 +133,9 @@ create policy "household photo delete" on storage.objects
   for delete using (bucket_id = 'item-photos');
 
 -- ---------- Handy view for export ----------
-create or replace view inventory_export as
+-- security_invoker so the view respects RLS of the caller (Supabase flags
+-- the default SECURITY DEFINER behaviour as a lint error).
+create or replace view inventory_export with (security_invoker = on) as
 select
   i.id, i.title, i.category, i.subcategory, i.brand, i.model, i.year_made,
   i.condition, i.location, i.quantity,

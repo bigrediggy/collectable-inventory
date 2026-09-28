@@ -13,12 +13,40 @@ export function photoUrl(path) {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+// ---- Inventories ----
+export async function listInventories() {
+  const { data, error } = await supabase
+    .from('inventories')
+    .select('*')
+    .eq('is_archived', false)
+    .order('created_at');
+  if (error) throw error;
+  return data;
+}
+
+export async function createInventory({ name, owner, notes }) {
+  const { data, error } = await supabase
+    .from('inventories')
+    .insert({ name: name.trim(), owner: owner?.trim() || null, notes: notes?.trim() || null })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateInventory(id, fields) {
+  const { data, error } = await supabase.from('inventories').update(fields).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // ---- Items ----
-export async function listItems({ category, status, search } = {}) {
+export async function listItems({ inventoryId, category, status, search } = {}) {
   let q = supabase
     .from('items')
     .select('*, item_photos(id, storage_path, is_primary)')
     .order('created_at', { ascending: false });
+  if (inventoryId) q = q.eq('inventory_id', inventoryId);
   if (category) q = q.eq('category', category);
   if (status) q = q.eq('status', status);
   if (search) q = q.or(`title.ilike.%${search}%,brand.ilike.%${search}%,model.ilike.%${search}%,location.ilike.%${search}%`);
@@ -74,8 +102,10 @@ export async function uploadPhoto(itemId, blob, { isPrimary = false } = {}) {
   return data;
 }
 
-export async function counts() {
-  const { data, error } = await supabase.from('items').select('status, value_suggested, sold_price');
+export async function counts(inventoryId) {
+  let q = supabase.from('items').select('status, value_suggested, sold_price');
+  if (inventoryId) q = q.eq('inventory_id', inventoryId);
+  const { data, error } = await q;
   if (error) throw error;
   const c = { total: data.length, byStatus: {}, valueSum: 0, soldSum: 0 };
   for (const r of data) {

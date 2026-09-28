@@ -2,15 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { counts, listItems } from '../lib/supabase.js';
 import { STATUSES } from '../categories.js';
 
-export default function Dashboard() {
+export default function Dashboard({ inventory }) {
   const [c, setC] = useState(null);
   const [err, setErr] = useState(null);
 
-  useEffect(() => { counts().then(setC).catch(e => setErr(e.message)); }, []);
+  useEffect(() => {
+    setC(null);
+    counts(inventory.id).then(setC).catch(e => setErr(e.message));
+  }, [inventory.id]);
 
   async function exportCsv() {
-    const rows = await listItems();
-    const cols = ['id', 'title', 'category', 'subcategory', 'brand', 'model', 'year_made', 'condition', 'location',
+    const rows = (await listItems({ inventoryId: inventory.id })).map(r => ({ ...r, inventory: inventory.name, owner: inventory.owner }));
+    const cols = ['inventory', 'owner', 'id', 'title', 'category', 'subcategory', 'brand', 'model', 'year_made', 'condition', 'location',
       'quantity', 'value_low', 'value_high', 'value_suggested', 'value_source', 'status', 'marketplace',
       'listing_price', 'views', 'watchers', 'inquiries', 'sold_price', 'sold_at', 'description', 'notes', 'created_at'];
     const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -18,7 +21,8 @@ export default function Dashboard() {
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    const slug = inventory.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    a.download = `${slug}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
   }
 
@@ -27,6 +31,9 @@ export default function Dashboard() {
 
   return (
     <div>
+      <div className="muted" style={{ margin: '10px 0 4px' }}>
+        <strong>{inventory.name}</strong>{inventory.owner ? ` · ${inventory.owner}` : ''}{inventory.notes ? ` · ${inventory.notes}` : ''}
+      </div>
       <div className="stats">
         <div className="stat"><div className="n">{c.total}</div><div className="muted">items</div></div>
         <div className="stat"><div className="n">${c.valueSum.toFixed(0)}</div><div className="muted">suggested value</div></div>
@@ -37,7 +44,7 @@ export default function Dashboard() {
       </div>
       <div className="card">
         <button className="btn" onClick={exportCsv}>Export CSV</button>
-        <div className="muted small" style={{ marginTop: 6 }}>Full inventory as a spreadsheet — handy for an estate-sale company or the attorney.</div>
+        <div className="muted small" style={{ marginTop: 6 }}>This inventory as a spreadsheet — handy for an estate-sale company or the attorney.</div>
       </div>
     </div>
   );

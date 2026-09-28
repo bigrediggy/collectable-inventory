@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { listItems, photoUrl } from '../lib/supabase.js';
 import { CATEGORIES, STATUSES, catIcon } from '../categories.js';
 
-export default function Inventory({ onOpen }) {
+export default function Inventory({ inventory, onOpen }) {
   const [items, setItems] = useState(null);
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
@@ -12,11 +12,11 @@ export default function Inventory({ onOpen }) {
   useEffect(() => {
     let alive = true;
     setErr(null);
-    listItems({ category, status, search })
+    listItems({ inventoryId: inventory.id, category, status, search })
       .then(d => alive && setItems(d))
       .catch(e => alive && setErr(e.message));
     return () => { alive = false; };
-  }, [category, status, search]);
+  }, [inventory.id, category, status, search]);
 
   return (
     <div>
@@ -38,7 +38,7 @@ export default function Inventory({ onOpen }) {
 
       {err && <p className="err">{err}</p>}
       {items === null && <div className="row"><span className="spinner" /> Loading…</div>}
-      {items?.length === 0 && <p className="muted">Nothing here yet.</p>}
+      {items?.length === 0 && <p className="muted">Nothing in {inventory.name} yet.</p>}
 
       <div className="list">
         {items?.map(it => {

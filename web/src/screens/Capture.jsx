@@ -6,7 +6,7 @@ import ItemForm from '../components/ItemForm.jsx';
 
 const EMPTY = { title: '', category: 'other', condition: 'Unknown', quantity: 1, identifiers: {}, attributes: {} };
 
-export default function Capture({ onSaved }) {
+export default function Capture({ inventory, onSaved }) {
   const [photos, setPhotos] = useState([]);       // [{blob, url}]
   const [hint, setHint] = useState('');
   const [lot, setLot] = useState(false);       // set / roll / lot of several pieces
@@ -70,7 +70,7 @@ export default function Capture({ onSaved }) {
   async function save() {
     setErr(null); setPhase('saving');
     try {
-      const row = await insertItem({ ...item, status: 'inventoried' });
+      const row = await insertItem({ ...item, status: 'inventoried', inventory_id: inventory.id });
       for (let i = 0; i < photos.length; i++) {
         await uploadPhoto(row.id, photos[i].blob, { isPrimary: i === 0 });
       }
@@ -103,7 +103,7 @@ export default function Capture({ onSaved }) {
           <button className="add" onClick={() => galleryRef.current.click()} title="From gallery">🖼️</button>
         </div>
         <div className="muted small" style={{ marginTop: 6 }}>
-          First photo becomes the main one. Add a second shot of labels, serial numbers, or the back. Tap a photo to remove it.
+          Adding to <strong>{inventory.name}</strong>. First photo becomes the main one. Add a second shot of labels, serial numbers, or the back. Tap a photo to remove it.
         </div>
       </div>
 

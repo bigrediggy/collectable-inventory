@@ -4,7 +4,7 @@ import { fileToResizedJpeg } from '../lib/image.js';
 import ItemForm from '../components/ItemForm.jsx';
 import Valuation from '../components/Valuation.jsx';
 
-export default function ItemDetail({ id, onDeleted }) {
+export default function ItemDetail({ id, inventories = [], onDeleted }) {
   const [item, setItem] = useState(null);
   const [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -78,6 +78,13 @@ export default function ItemDetail({ id, onDeleted }) {
       <Valuation item={item} onAccept={extra => save(extra)} />
 
       <div className="card">
+        {inventories.length > 1 && (
+          <label className="field"><span>Inventory (move item)</span>
+            <select value={draft.inventory_id || ''} onChange={e => setDraft({ ...draft, inventory_id: e.target.value })}>
+              {inventories.map(i => <option key={i.id} value={i.id}>{i.name}{i.owner ? ` — ${i.owner}` : ''}</option>)}
+            </select>
+          </label>
+        )}
         <ItemForm value={draft} onChange={setDraft} showSale />
         {msg && <p className={msg === 'Saved' || msg.startsWith('Listing') ? 'ok' : 'err'}>{msg}</p>}
         <div className="row">

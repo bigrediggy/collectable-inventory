@@ -13,6 +13,7 @@ collectable-inventory/
 
 ## How it works
 
+0. Pick the **inventory** in the top bar (one per person or collection — Val's house, the Oz collection, your own stuff). "＋ New inventory…" in the same dropdown adds one. The choice is remembered on the device. An item can be moved between inventories from its detail page.
 1. **Add** tab → take a photo (or several) → *Describe with AI*. Claude reads the photo and
    returns a title, category, brand/model, year, condition, identifiers (serial, catalog #,
    issue #, mint mark…), a listing description, and suggested eBay search strings.
@@ -31,7 +32,7 @@ collectable-inventory/
 
 ### 1. Supabase (database + photo storage)
 1. Create a free project at https://supabase.com.
-2. SQL Editor → paste `supabase/schema.sql` → Run. Then paste `supabase/api_cache.sql` → Run (small table the API uses to cache spot prices and PCGS lookups so daily quotas aren't wasted).
+2. SQL Editor → paste `supabase/schema.sql` → Run. Then paste `supabase/api_cache.sql` → Run (small table the API uses to cache spot prices and PCGS lookups so daily quotas aren't wasted). Then `supabase/migration_inventories.sql` → Run (multiple inventories; seeds "Val's house" and attaches any existing items to it).
 3. Project Settings → API → copy the **Project URL** and **anon public** key.
 
 > The schema's RLS policies allow the anon key full access. That is fine for a
