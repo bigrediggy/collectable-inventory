@@ -57,7 +57,8 @@ export async function classifyComps(item, comps) {
         model: MODEL,
         max_tokens: 800,
         system: `You judge whether marketplace listings are comparable sales for a specific item.
-Return ONLY a JSON array, one entry per listing index, like [{"i":0,"r":"match"},{"i":1,"r":"partial"},...].
+Return ONLY a JSON array, one entry per listing index, like [{"i":0,"r":"match"},{"i":1,"r":"partial","c":"proof silver dollar"},...].
+For EVERY listing also give "c": a short, consistent label for what the listing actually contains (e.g. "proof silver dollar", "proof clad half dollar", "uncirculated clad half dollar", "complete 3-coin set", "guitar body only", "volume 2"). Use the same label for the same thing across listings; this is used to group and sum components.
 r must be one of:
 - "match": the same item, complete, in comparable form (same set/lot size, same product; grade/condition may differ).
 - "partial": a component or subset (one coin from a multi-coin set, a body without the case, a single volume of a run) or a larger bundle that contains it.
@@ -69,9 +70,12 @@ When the ITEM is a lot/set of N pieces, a listing is a "match" ONLY if its title
       const text = resp.content.filter(b => b.type === 'text').map(b => b.text).join('');
       const m = text.match(/\[[\s\S]*\]/);
       const arr = m ? JSON.parse(m[0]) : [];
-      for (const { i, r } of arr) {
+      for (const { i, r, c: comp } of arr) {
         const c = pending[Number(i)];
-        if (c && ['match', 'partial', 'unrelated'].includes(r)) c.relevance = r;
+        if (c && ['match', 'partial', 'unrelated'].includes(r)) {
+          c.relevance = r;
+          if (comp) c.component = String(comp).toLowerCase().trim();
+        }
       }
       method = 'ai';
     } catch (e) {
@@ -79,6 +83,22 @@ When the ITEM is a lot/set of N pieces, a listing is a "match" ONLY if its title
     }
   }
   for (const c of comps) if (!c.relevance) c.relevance = 'match';
+
+  // Hard rule for lots: a "match" must say so in the title. Sellers title
+  // single coins with the full program name, and the model lets those through.
+  const lotCount = Number(item.coin?.count) || (Number(item.quantity) > 1 ? Number(item.quantity) : 0);
+  if (lotCount > 1) {
+    const words = { 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six' }[lotCount] || '';
+    const multi = new RegExp(
+      `\\b(set|lot|complete|all ${lotCount}|all ${words}|${lotCount}[ -]?(coins?|pcs?|pieces?|pc)|${words}[ -]?(coins?|pieces?))\\b`, 'i',
+    );
+    for (const c of comps) {
+      if (c.relevance === 'match' && !multi.test(c.title || '')) {
+        c.relevance = 'partial';
+        c.why = 'title does not indicate a set';
+      }
+    }
+  }
 
   return {
     matches: comps.filter(c => c.relevance === 'match'),

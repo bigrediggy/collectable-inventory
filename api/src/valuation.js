@@ -177,6 +177,26 @@ export async function valueItem(item) {
     // Show matches first, then partial, then unrelated.
     const rank = { match: 0, partial: 1, unrelated: 2 };
     out.comps.sort((a, b) => (rank[a.relevance] ?? 0) - (rank[b.relevance] ?? 0));
+
+    // Lot with no usable set-level comps → estimate as the sum of its components.
+    const lotCount = Number(item.coin?.count) || (Number(item.quantity) > 1 ? Number(item.quantity) : 0);
+    const ebayMatches = matches.filter(c => c.source === 'ebay_active').length;
+    if (lotCount > 1 && ebayMatches < 2) {
+      const groups = new Map();
+      for (const c of partial) {
+        if (!c.component || !c.price) continue;
+        if (!groups.has(c.component)) groups.set(c.component, []);
+        groups.get(c.component).push(c.price);
+      }
+      const parts = [...groups.entries()]
+        .map(([name, prices]) => ({ name, n: prices.length, median: priceStats(prices).median }))
+        .sort((a, b) => b.median - a.median)
+        .slice(0, lotCount);
+      if (parts.length >= 2) {
+        const sum = round2(parts.reduce((s, p) => s + p.median, 0));
+        out.components = { parts, sum, found: parts.length, expected: lotCount };
+      }
+    }
   }
 
   // --- Suggested range ---
@@ -234,6 +254,15 @@ export async function valueItem(item) {
         basis: `${s.n} ${primary.filtered ? 'matching ' : ''}${label} (median $${s.median})` + (out.priceGuide ? ` · Reverb price guide $${out.priceGuide.low}–$${out.priceGuide.high}` : ''),
       };
     }
+  } else if (out.components) {
+    const { parts, sum, found, expected } = out.components;
+    out.suggestion = {
+      low: round2(sum * 0.85), high: round2(sum * 1.1), suggested: sum,
+      source: 'components',
+      basis: `Sum of ${found} component medians (${parts.map(p => `${p.name} $${p.median}`).join(' + ')})` +
+        (found < expected ? ` — only ${found} of ${expected} pieces found, so this is low` : ''),
+    };
+    if (found < expected) out.warnings.push(`Component estimate covers ${found} of ${expected} pieces; add the missing piece's value by hand.`);
   } else {
     out.suggestion = null;
   }

@@ -70,6 +70,13 @@ export default function Valuation({ item, onAccept }) {
             </div>
           ) : <div className="muted">No suggestion.</div>}
 
+          {result.components && (
+            <div className="small" style={{ marginTop: 6 }}>
+              Component estimate <span className="price">${fmt(result.components.sum)}</span>
+              <span className="muted"> — {result.components.parts.map(p => `${p.name} $${fmt(p.median)} (${p.n})`).join(' + ')}
+                {result.components.found < result.components.expected ? ` · ${result.components.found} of ${result.components.expected} pieces found` : ''}</span>
+            </div>
+          )}
           {result.pcgs?.guide_low != null && (
             <div className="small" style={{ marginTop: 6 }}>
               PCGS price guide <span className="price">${fmt(result.pcgs.guide_low)}{result.pcgs.guide_high !== result.pcgs.guide_low ? `–$${fmt(result.pcgs.guide_high)}` : ''}</span>
@@ -108,7 +115,7 @@ export default function Valuation({ item, onAccept }) {
                   <div className="grow">
                     <div className="small" title={c.title}>{c.title}</div>
                     <div className="muted small">
-                      {c.relevance === 'partial' && <span className="badge listed">partial</span>}
+                      {c.relevance === 'partial' && <span className="badge listed">{c.component ? `partial · ${c.component}` : 'partial'}</span>}
                       {c.relevance === 'unrelated' && <span className="badge">unrelated</span>}
                       {c.relevance && c.relevance !== 'match' && ' '}
                       {c.source === 'discogs'
