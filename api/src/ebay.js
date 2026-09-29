@@ -42,12 +42,14 @@ async function getToken() {
 /**
  * @returns {Promise<{comps: Array, stats: object|null}>}
  */
-export async function ebayComps(query, { categoryId = null, limit = 25 } = {}) {
+export async function ebayComps(query, { categoryId = null, limit = 50 } = {}) {
   const token = await getToken();
+  // Default (best match) ordering. Sorting by price ascending buried complete
+  // sets under cheap singles and "COA only" listings; relevance filtering
+  // happens downstream anyway.
   const params = new URLSearchParams({
     q: query,
     limit: String(limit),
-    sort: 'price',            // ascending; lets us find the floor
     filter: 'buyingOptions:{FIXED_PRICE|AUCTION},conditions:{USED|NEW|UNSPECIFIED},priceCurrency:USD',
   });
   if (categoryId) params.set('category_ids', categoryId);

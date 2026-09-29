@@ -127,9 +127,43 @@ export async function valueItem(item) {
   // --- Relevance pass: only true matches drive the numbers ---
   // Discogs and PCGS comps are keyed by release/cert so they're exact already;
   // eBay and Reverb are free-text searches and need filtering.
-  const searchComps = out.comps.filter(c => c.source === 'ebay_active' || c.source === 'reverb');
+  let searchComps = out.comps.filter(c => c.source === 'ebay_active' || c.source === 'reverb');
   if (searchComps.length) {
-    const { matches, partial, unrelated, method } = await classifyComps(item, searchComps);
+    let { matches, partial, unrelated, method } = await classifyComps(item, searchComps);
+
+    // Lots/sets: if the first search only surfaced components, retry once with
+    // an explicitly lot-shaped query ("... 3 coin set") before giving up.
+    const lotCount = Number(item.coin?.count) || (Number(item.quantity) > 1 ? Number(item.quantity) : 0);
+    const ebaySrc = out.sources.find(s => s.source === 'ebay_active');
+    if (ebaySrc && lotCount > 1 && matches.filter(c => c.source === 'ebay_active').length < 2 && ebayConfigured()) {
+      const base = simplify(ebaySrc.query)[0] || ebaySrc.query;
+      const lotQueries = uniq([
+        `${base} ${lotCount} coin set`,
+        `${base} set`,
+        `${base} ${lotCount} piece set`,
+      ]);
+      for (const q of lotQueries) {
+        try {
+          const { comps } = await ebayComps(q, { categoryId: null });
+          const fresh = comps.filter(c => !out.comps.some(x => x.url === c.url));
+          if (!fresh.length) continue;
+          const cls = await classifyComps(item, fresh);
+          if (cls.matches.length) {
+            out.comps.push(...fresh);
+            ebaySrc.query = q;
+            ebaySrc.retriedForLot = true;
+            searchComps = out.comps.filter(c => c.source === 'ebay_active' || c.source === 'reverb');
+            matches = searchComps.filter(c => c.relevance === 'match');
+            partial = searchComps.filter(c => c.relevance === 'partial');
+            unrelated = searchComps.filter(c => c.relevance === 'unrelated');
+            break;
+          }
+        } catch (e) {
+          out.warnings.push(`eBay retry: ${e.message}`);
+          break;
+        }
+      }
+    }
     out.relevance = { method, matches: matches.length, partial: partial.length, unrelated: unrelated.length };
     for (const src of ['ebay_active', 'reverb']) {
       const idx = out.sources.findIndex(s => s.source === src);
