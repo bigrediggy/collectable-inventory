@@ -120,6 +120,32 @@ export async function valueItem(item) {
     if (!found && !out.warnings.some(w => w.startsWith('eBay:'))) {
       out.warnings.push(`eBay: no active listings matched (tried: ${uniq(tried).slice(0, 3).map(q => `"${q}"`).join(', ')}). Edit the search query and try again.`);
     }
+
+    // Lots/sets: ALWAYS add a lot-shaped search to the pool, unless the query
+    // already says so. Sellers title complete sets differently from singles,
+    // and best-match ordering for the program name is dominated by singles.
+    const lotCount = Number(item.coin?.count) || (Number(item.quantity) > 1 ? Number(item.quantity) : 0);
+    const ebaySrc = out.sources.find(s => s.source === 'ebay_active');
+    const q0 = ebaySrc?.query || queries[0] || '';
+    if (lotCount > 1 && q0 && !/\b(set|lot|piece|pc|coins?\b.*\bset)\b/i.test(q0)) {
+      const base = simplify(q0)[0] || q0;
+      for (const q of uniq([`${base} ${lotCount} coin set`, `${base} set`])) {
+        try {
+          const { comps } = await ebayComps(q, { categoryId: null });
+          const fresh = comps.filter(c => !out.comps.some(x => x.url === c.url));
+          if (fresh.length) {
+            out.comps.push(...fresh);
+            if (ebaySrc) { ebaySrc.lotQuery = q; } else {
+              out.sources.push({ source: 'ebay_active', query: q, stats: priceStats(fresh.map(c => c.price)), lotQuery: q });
+            }
+            break;
+          }
+        } catch (e) {
+          out.warnings.push(`eBay (lot search): ${e.message}`);
+          break;
+        }
+      }
+    }
   } else {
     out.warnings.push('eBay not configured (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET)');
   }
@@ -129,41 +155,7 @@ export async function valueItem(item) {
   // eBay and Reverb are free-text searches and need filtering.
   let searchComps = out.comps.filter(c => c.source === 'ebay_active' || c.source === 'reverb');
   if (searchComps.length) {
-    let { matches, partial, unrelated, method } = await classifyComps(item, searchComps);
-
-    // Lots/sets: if the first search only surfaced components, retry once with
-    // an explicitly lot-shaped query ("... 3 coin set") before giving up.
-    const lotCount = Number(item.coin?.count) || (Number(item.quantity) > 1 ? Number(item.quantity) : 0);
-    const ebaySrc = out.sources.find(s => s.source === 'ebay_active');
-    if (ebaySrc && lotCount > 1 && matches.filter(c => c.source === 'ebay_active').length < 2 && ebayConfigured()) {
-      const base = simplify(ebaySrc.query)[0] || ebaySrc.query;
-      const lotQueries = uniq([
-        `${base} ${lotCount} coin set`,
-        `${base} set`,
-        `${base} ${lotCount} piece set`,
-      ]);
-      for (const q of lotQueries) {
-        try {
-          const { comps } = await ebayComps(q, { categoryId: null });
-          const fresh = comps.filter(c => !out.comps.some(x => x.url === c.url));
-          if (!fresh.length) continue;
-          const cls = await classifyComps(item, fresh);
-          if (cls.matches.length) {
-            out.comps.push(...fresh);
-            ebaySrc.query = q;
-            ebaySrc.retriedForLot = true;
-            searchComps = out.comps.filter(c => c.source === 'ebay_active' || c.source === 'reverb');
-            matches = searchComps.filter(c => c.relevance === 'match');
-            partial = searchComps.filter(c => c.relevance === 'partial');
-            unrelated = searchComps.filter(c => c.relevance === 'unrelated');
-            break;
-          }
-        } catch (e) {
-          out.warnings.push(`eBay retry: ${e.message}`);
-          break;
-        }
-      }
-    }
+    const { matches, partial, unrelated, method } = await classifyComps(item, searchComps);
     out.relevance = { method, matches: matches.length, partial: partial.length, unrelated: unrelated.length };
     for (const src of ['ebay_active', 'reverb']) {
       const idx = out.sources.findIndex(s => s.source === src);

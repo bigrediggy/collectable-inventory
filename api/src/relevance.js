@@ -45,7 +45,9 @@ export async function classifyComps(item, comps) {
       const lines = pending.map((c, i) => `${i}: ${String(c.title).slice(0, 140)}${c.price ? ` — $${c.price}` : ''}`).join('\n');
       const what = [
         `ITEM: ${item.title}`,
-        item.coin?.count > 1 ? `This is a LOT/SET of ${item.coin.count} pieces.` : '',
+        item.coin?.count > 1
+          ? `This is a LOT/SET of ${item.coin.count} pieces. A listing must explicitly indicate ${item.coin.count} pieces / a set to be a match; otherwise it is "partial".`
+          : (Number(item.quantity) > 1 ? `This is a LOT of ${item.quantity} pieces sold together.` : ''),
         item.coin?.product_type ? `Coin product type: ${item.coin.product_type}.` : '',
         item.instrument?.type ? `Instrument type: ${item.instrument.type}.` : '',
         item.description ? `Description: ${String(item.description).slice(0, 400)}` : '',
@@ -60,7 +62,8 @@ r must be one of:
 - "match": the same item, complete, in comparable form (same set/lot size, same product; grade/condition may differ).
 - "partial": a component or subset (one coin from a multi-coin set, a body without the case, a single volume of a run) or a larger bundle that contains it.
 - "unrelated": a different item, a different year/variant, an accessory, packaging, a reproduction, or a lot of many unrelated things.
-Be strict about set size: a single coin is "partial" for a 3-coin set, not a match.`,
+Be strict about set size: a single coin is "partial" for a 3-coin set, not a match.
+When the ITEM is a lot/set of N pieces, a listing is a "match" ONLY if its title explicitly signals multiple pieces (words like "set", "N coin", "N-piece", "lot of N", "complete", "all three"). Sellers often title a single coin with the program's full name ("2014 Baseball Hall of Fame Commemorative Coin Program"); with no explicit multi-piece signal, assume it is ONE piece and return "partial". Price is a useful tiebreaker: a listing priced like one coin is one coin.`,
         messages: [{ role: 'user', content: `${what}\n\nLISTINGS:\n${lines}` }],
       });
       const text = resp.content.filter(b => b.type === 'text').map(b => b.text).join('');
