@@ -9,6 +9,7 @@ import { reverbConfigured } from './reverb.js';
 import { getSpotPrices } from './spot.js';
 import { pcgsConfigured } from './pcgs.js';
 import { cachePersistent } from './cache.js';
+import { authMiddleware, loginRequired } from './auth.js';
 import { CATEGORIES } from './categories.js';
 
 const app = express();
@@ -19,15 +20,8 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '30mb' })); // base64 photos from a tablet camera
 
-// Tiny shared-secret gate so only your PWA can spend your API credits.
-app.use('/api', (req, res, next) => {
-  if (req.path === '/health') return next();
-  const want = process.env.APP_KEY;
-  if (want && req.get('x-app-key') !== want) {
-    return res.status(401).json({ error: 'bad app key' });
-  }
-  next();
-});
+// Every /api call (except health) must come from a signed-in user.
+app.use('/api', authMiddleware());
 
 app.get('/api/health', async (_req, res) => {
   // Health never spends an API call: it only reports what's cached.
@@ -39,7 +33,8 @@ app.get('/api/health', async (_req, res) => {
     discogs: discogsConfigured(),
     reverb: reverbConfigured(),
     pcgs: pcgsConfigured(),
-    cache: cachePersistent ? 'supabase' : 'memory only (set SUPABASE_URL + SUPABASE_ANON_KEY)',
+    cache: cachePersistent ? 'supabase' : 'memory only (set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)',
+    auth: loginRequired ? 'login required' : 'app key or login',
     spot: spot.prices
       ? { ...spot.prices, source: spot.source, asOf: spot.asOf, expiresAt: spot.expiresAt || null }
       : (process.env.METALS_DEV_API_KEY ? 'not fetched yet — first coin valuation will fetch and cache for 24h' : null),

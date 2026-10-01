@@ -1,14 +1,21 @@
+import { getSession } from './supabase.js';
+
 const API = (import.meta.env.VITE_API_URL || 'http://localhost:8787').replace(/\/$/, '');
 const KEY = import.meta.env.VITE_APP_KEY || '';
 
 async function call(path, body, timeoutMs = 90_000) {
+  const session = await getSession();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res;
   try {
     res = await fetch(`${API}${path}`, {
       method: body ? 'POST' : 'GET',
-      headers: { 'Content-Type': 'application/json', 'x-app-key': KEY },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-app-key': KEY,
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
     });

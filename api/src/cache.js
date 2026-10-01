@@ -2,14 +2,16 @@
 // persistence across restarts (Render free tier restarts on every wake-up,
 // so memory alone burns through daily API quotas).
 //
-// Requires SUPABASE_URL + SUPABASE_ANON_KEY in api/.env and the api_cache
-// table from supabase/api_cache.sql. Falls back to memory-only if absent.
+// Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in api/.env (the service
+// role bypasses RLS; the api_cache table has no user policies on purpose) and
+// the table from supabase/api_cache.sql. Falls back to memory-only if absent.
 
 import { createClient } from '@supabase/supabase-js';
 
 const mem = new Map();
-const sb = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const sb = process.env.SUPABASE_URL && serviceKey
+  ? createClient(process.env.SUPABASE_URL, serviceKey, { auth: { persistSession: false } })
   : null;
 
 export const cachePersistent = Boolean(sb);

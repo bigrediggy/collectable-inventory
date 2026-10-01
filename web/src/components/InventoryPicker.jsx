@@ -32,7 +32,9 @@ export default function InventoryPicker({ inventories, currentId, onSelect, onCr
           aria-label="Inventory"
         >
           {inventories.map(i => (
-            <option key={i.id} value={i.id}>{i.name}{i.owner ? ` — ${i.owner}` : ''}</option>
+            <option key={i.id} value={i.id}>
+              {i.name}{i.owner ? ` — ${i.owner}` : ''}{i.owner_profile?.display_name ? ` (${i.owner_profile.display_name})` : ''}
+            </option>
           ))}
           <option value="__new">＋ New inventory…</option>
         </select>

@@ -35,9 +35,16 @@ collectable-inventory/
 2. SQL Editor → paste `supabase/schema.sql` → Run. Then paste `supabase/api_cache.sql` → Run (small table the API uses to cache spot prices and PCGS lookups so daily quotas aren't wasted). Then `supabase/migration_inventories.sql` → Run (multiple inventories; seeds "Val's house" and attaches any existing items to it).
 3. Project Settings → API → copy the **Project URL** and **anon public** key.
 
-> The schema's RLS policies allow the anon key full access. That is fine for a
-> household tool where the only place the key lives is the app on your tablet. If you
-> want a login screen, see the comment block in `schema.sql`.
+4. Then run `supabase/migration_auth.sql`. Before that, under Authentication → Providers,
+   make sure **Email** is enabled (turn off "Confirm email" while testing if you want
+   instant sign-ups). After running it, sign up in the app, then run the STEP 2 block at
+   the bottom of that file with your email to make yourself admin and take ownership of
+   the existing inventories.
+5. Project Settings → API → copy the **service_role** key too; it goes only in the API's
+   env (never the web app).
+
+> With `migration_auth.sql` applied, every table has real row-level security: a user
+> sees only inventories they own or have been shared on; admins see everything.
 
 ### 2. API keys
 | Service | Where | Needed for |
@@ -53,6 +60,17 @@ eBay's Browse API works with just the client ID/secret (no user login). It retur
 **active** listings. Sold-price history is the *Marketplace Insights* API, which needs a
 separate approval from eBay; if you get it, add a call in `api/src/ebay.js` alongside
 `ebayComps()`.
+
+### Users, sharing and admin
+- Anyone can create an account from the login screen (disable "Enable sign ups" in
+  Supabase → Authentication → Providers → Email to make it invite-only).
+- Each inventory has an owner. The ⚙ button next to the inventory picker opens
+  rename / share / delete. Share by entering the email of someone who has signed up;
+  "can edit" lets them add and value items, "view only" lets them look.
+- Admins (flag set in Admin tab, or via SQL for the first one) get an **Admin** tab
+  listing every inventory and user: reassign owners, delete empty inventories, promote
+  or demote admins.
+- The API only answers signed-in users (it verifies the Supabase login token).
 
 ### 3. Run locally
 ```bash

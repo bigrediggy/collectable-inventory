@@ -13,11 +13,35 @@ export function photoUrl(path) {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+// ---- Auth ----
+export const getSession = async () => (await supabase.auth.getSession()).data.session;
+export const onAuthChange = cb => supabase.auth.onAuthStateChange((_e, s) => cb(s));
+export const signIn  = (email, password) => supabase.auth.signInWithPassword({ email, password });
+export const signUp  = (email, password, display_name) =>
+  supabase.auth.signUp({ email, password, options: { data: { display_name } } });
+export const signOut = () => supabase.auth.signOut();
+export const resetPassword = email =>
+  supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+export const updatePassword = password => supabase.auth.updateUser({ password });
+
+export async function getProfile() {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', (await getSession())?.user?.id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function findProfileByEmail(email) {
+  const { data, error } = await supabase.from('profiles').select('id, email, display_name').ilike('email', email.trim()).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // ---- Inventories ----
+// RLS limits this to inventories the user owns, is a member of, or (admin) all.
 export async function listInventories() {
   const { data, error } = await supabase
     .from('inventories')
-    .select('*')
+    .select('*, owner_profile:profiles!inventories_owner_id_fkey(id, email, display_name)')
     .eq('is_archived', false)
     .order('created_at');
   if (error) throw error;
@@ -25,9 +49,10 @@ export async function listInventories() {
 }
 
 export async function createInventory({ name, owner, notes }) {
+  const session = await getSession();
   const { data, error } = await supabase
     .from('inventories')
-    .insert({ name: name.trim(), owner: owner?.trim() || null, notes: notes?.trim() || null })
+    .insert({ name: name.trim(), owner: owner?.trim() || null, notes: notes?.trim() || null, owner_id: session.user.id })
     .select()
     .single();
   if (error) throw error;
@@ -38,6 +63,58 @@ export async function updateInventory(id, fields) {
   const { data, error } = await supabase.from('inventories').update(fields).eq('id', id).select().single();
   if (error) throw error;
   return data;
+}
+
+export async function deleteInventory(id) {
+  // items cascade-restrict: must be empty (or admin moves them first)
+  const { error } = await supabase.from('inventories').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Sharing ----
+export async function listMembers(inventoryId) {
+  const { data, error } = await supabase
+    .from('inventory_members')
+    .select('user_id, role, added_at, profile:profiles(id, email, display_name)')
+    .eq('inventory_id', inventoryId);
+  if (error) throw error;
+  return data;
+}
+
+export async function addMemberByEmail(inventoryId, email, role = 'editor') {
+  const p = await findProfileByEmail(email);
+  if (!p) throw new Error(`No user with email ${email} — they need to sign up first.`);
+  const { error } = await supabase.from('inventory_members').upsert({ inventory_id: inventoryId, user_id: p.id, role });
+  if (error) throw error;
+  return p;
+}
+
+export async function removeMember(inventoryId, userId) {
+  const { error } = await supabase.from('inventory_members').delete().match({ inventory_id: inventoryId, user_id: userId });
+  if (error) throw error;
+}
+
+// ---- Admin ----
+export async function adminOverview() {
+  const { data, error } = await supabase.rpc('admin_overview');
+  if (error) throw error;
+  return data;
+}
+
+export async function listProfiles() {
+  const { data, error } = await supabase.from('profiles').select('*').order('created_at');
+  if (error) throw error;
+  return data;
+}
+
+export async function setAdmin(userId, isAdmin) {
+  const { error } = await supabase.from('profiles').update({ is_admin: isAdmin }).eq('id', userId);
+  if (error) throw error;
+}
+
+export async function reassignInventory(inventoryId, newOwnerId) {
+  const { error } = await supabase.from('inventories').update({ owner_id: newOwnerId }).eq('id', inventoryId);
+  if (error) throw error;
 }
 
 // ---- Items ----
